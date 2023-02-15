@@ -3,6 +3,7 @@ import time
 import html2text
 import json
 import pandas as pd
+import numpy as np
 
 h = html2text.HTML2Text()
 
@@ -94,7 +95,7 @@ def get_questionids(page_count = 1):
 def get_raw_data(question_id):
 	"""Gets raw data from the question id and puts it in a dictionary with the question ID"""
 
-	api_res = f"https://api.stackexchange.com//2.3/questions/{question_id}?key={API_KEY}&access_token={NOEXPIRY_ACCESS_TOKEN}&order=desc&sort=activity&site={SITE}&filter=!*MjkmySpgiC_vH9u"
+	api_res = f"https://api.stackexchange.com//2.3/questions/{question_id}?key={API_KEY}&access_token={NOEXPIRY_ACCESS_TOKEN}&order=desc&sort=activity&site={SITE}&filter=!22jPRAK.dmqh.RCdSxWC*"
 	response = requests.get(api_res)
 	response.raise_for_status()
 	if response.status_code != 200:
@@ -102,10 +103,8 @@ def get_raw_data(question_id):
 	else:
 		data = response.json()
 		try:
-			tags = data["items"][0]["tags"]
 			raw_data = {question_id: data}
 			return raw_data
-			# print(json.dumps(raw_data, indent=2))
 		except KeyError:
 			return{question_id: "No Data Found"}
 
@@ -125,26 +124,46 @@ def get_question_info(raw_data, question_id):
 		question_link = h.handle(raw_data[question_id]["items"][0]["link"]).replace("\n","")
 	except KeyError:
 		question_link = h.handle(raw_data[question_id]["items"][0]["link"])
+	question_score = (raw_data[question_id]["items"][0]["score"])
+	# Gets information about comments on the question
+	try:
+		question_comments = raw_data[question_id]["items"][0]["comments"]
+		question_comment_number = 0
+		question_comment_list = []
+		for individual_comment in question_comments:
+			question_comment_user_id = individual_comment["owner"]["user_id"]
+			try:
+				question_comment_body = h.handle(individual_comment["body"]).replace("\n","")
+			except KeyError:
+				question_comment_body = h.handle(individual_comment["body"])
+			try:
+				question_comment_repliedto = individual_comment["reply_to_user"]["user_id"]
+			except KeyError:
+				question_comment_repliedto = "N/A"
+			question_comment_number += 1
+			question_comment_information = {"question_comment_number": question_comment_number,
+											"question_comment_user_id": question_comment_user_id,
+											"question_comment_body": question_comment_body,
+											"question_comment_repliedto": question_comment_repliedto}
+			question_comment_list.append(question_comment_information)
+	except KeyError:
+		question_comment_list = [{"question_comment_number": "N/A",
+								"question_comment_user_id": "N/A",
+								"question_comment_body": "N/A",
+								"question_comment_repliedto": "N/A"}]
 	try:
 		question_user_id = raw_data[question_id]["items"][0]["owner"]["user_id"]
-		question_api_res = f"https://api.stackexchange.com//2.3/users/{question_user_id}?key={API_KEY}&access_token={NOEXPIRY_ACCESS_TOKEN}&order=desc&sort=reputation&site={SITE}&filter=!--LRAIKXVX.2"
-		question_response = requests.get(question_api_res)
-		question_id_info = question_response.json()
-		try:
-			question_user_aboutme = h.handle(question_id_info["items"][0]["about_me"]).replace("\n", " ")
-		except KeyError:
-			question_user_aboutme = "No user information"
 	except KeyError:
 		question_user_id = "no user id"
-		question_user_aboutme = "No user information"
 	# Puts the question data into a dictionary with the question id as the key
-	question_data = [question_title, question_body, question_link, question_user_id]
+	question_data = [question_title, question_body, question_link, question_user_id, question_score]
 	return {"question_data" :
 				{"question_title" : question_data[0],
 				 "question_body" : question_data[1],
 				 "question_link" : question_data[2],
 				 "question_user_id" : question_data[3],
-				 "question_user_aboutme": question_user_aboutme}
+				 "question_score": question_data[4],
+				 "question_comments": question_comment_list}
 			}
 
 def get_answer_info(raw_data, question_id):
@@ -158,26 +177,46 @@ def get_answer_info(raw_data, question_id):
 			for data in list_of_answers:
 				try:
 					answer_user_id = data["owner"]["user_id"]
-					answer_api_res = f"https://api.stackexchange.com//2.3/users/{answer_user_id}?key={API_KEY}&access_token={NOEXPIRY_ACCESS_TOKEN}&order=desc&sort=reputation&site={SITE}&filter=!--LRAIKXVX.2"
-					answer_response = requests.get(answer_api_res)
-					answer_id_info = answer_response.json()
-					# Get about me info from a userid
-					try:
-						answer_user_aboutme = h.handle(answer_id_info["items"][0]["about_me"]).replace("\n", " ")
-					except KeyError:
-						answer_user_aboutme = "No user information"
 				except KeyError:
 					answer_user_id = "User ID Deleted"
-					answer_user_aboutme = "No user"
 				answer_accepted = data["is_accepted"]
 				try:
 					answer_body = h.handle(data["body"]).replace("\n", " ")
 				except KeyError:
 					answer_body = h.handle(data["body"])
+				answer_score = data["score"]
+				# Gets information about comments on particular answers
+				try:
+					answer_comments = data["comments"]
+					answer_comment_number = 0
+					answer_comment_list = []
+					for individual_comment in answer_comments:
+						answer_comment_user_id = individual_comment["owner"]["user_id"]
+						try:
+							answer_comment_body = h.handle(individual_comment["body"]).replace("\n", "")
+						except KeyError:
+							answer_comment_body = h.handle(individual_comment["body"])
+						try:
+							answer_comment_repliedto = individual_comment["reply_to_user"]["user_id"]
+						except KeyError:
+							answer_comment_repliedto = "N/A"
+						answer_comment_number += 1
+						answer_comment_information = {"answer_comment_number": answer_comment_number,
+														"answer_comment_user_id": answer_comment_user_id,
+														"answer_comment_body": answer_comment_body,
+														"answer_comment_repliedto": answer_comment_repliedto}
+						answer_comment_list.append(answer_comment_information)
+				except KeyError:
+					answer_comment_list = [{"answer_comment_number": "N/A",
+												  "answer_comment_user_id": "N/A",
+												  "answer_comment_body": "N/A",
+												  "answer_comment_repliedto": "N/A"}]
+
 				answer_information = {"answer_user_id": answer_user_id,
-									 "answer_user_aboutme": answer_user_aboutme,
 									 "was_answer_accepted": answer_accepted,
-									 "answer_body": answer_body}
+									 "answer_body": answer_body,
+									  "answer_score": answer_score,
+									  "answer_comments": answer_comment_list}
 				answer_list.append(answer_information)
 			answer_data = {"answer_data": answer_list}
 			return answer_data
@@ -185,6 +224,10 @@ def get_answer_info(raw_data, question_id):
 			pass
 	except KeyError:
 		return {"answer_data" : "NO ANSWERS"}
+
+def get_comment_info(raw_data, question_id):
+	"""Gest information about comments and who the comments were to"""
+	comment_list = []
 
 def get_crosstag_info(raw_data, question_id):
 	"""Gets information about tags that were cross-posted against the question"""
@@ -210,6 +253,8 @@ for question_id in list_of_ids:
 	count_down -= 1
 	print(count_down)
 	raw_data = get_raw_data(question_id)
+	with open("test_data.json", "w") as qe_notepadfile:
+		json.dump(raw_data, qe_notepadfile, indent=2)
 	time.sleep(1)
 	if raw_data == {question_id: "No Data Found"}:
 		pass
@@ -229,20 +274,66 @@ clean_data_dict = {}
 for question_id in list_of_clean_data:
 	clean_data_dict.update(question_id)
 
-with open("qe_data.json", "w") as qe_notepadfile:
-	json.dump(clean_data_dict, qe_notepadfile, indent=2)
-
-with open("qe_data.json", "r") as data_file:
+with open("test_data.json", "w", encoding="utf8") as qe_notepadfile:
+	json.dump(clean_data_dict, qe_notepadfile, indent=2, ensure_ascii=True)
+#
+with open("test_data.json", "r") as data_file:
 	data = json.loads(data_file.read())
 
 # Indexes correctly
 df = pd.DataFrame.from_dict(data, orient="index")
 
+
 # Converts nested question_data in column and moves each key into its own column
 df = pd.concat([df.drop(["question_data"], axis=1), df["question_data"].apply(pd.Series)], axis=1)
-# Takes lists of answer data within a column and transforms it length-wise
-df2 = df.explode("answer_data")
-# Converts nested answer data into column and moves each key into its own column
-final_data = pd.concat([df2.drop(["answer_data"], axis=1), df2["answer_data"].apply(pd.Series)], axis=1)
+df.index.names = ["question_id"]
+# Explodes answer data and then puts the data into their own columns
+df = df.explode("answer_data")
+df = pd.concat([df.drop(["answer_data"], axis=1), df["answer_data"].apply(pd.Series)], axis=1)
+# Takes lists of comment data and transforms it length-wise, then puts the data into their own columns
+df = df.explode("question_comments")
+df = pd.concat([df.drop(["question_comments"], axis=1), df["question_comments"].apply(pd.Series)], axis=1)
+df = df.explode("answer_comments")
+df = pd.concat([df.drop(["answer_comments"], axis=1), df["answer_comments"].apply(pd.Series)], axis=1)
 
-final_data.to_csv("new_data.csv", encoding='utf-8')
+df = df.reset_index()
+
+# Melts all text to duplicate rows of data
+to_keep_text = ['question_id', 'tag_data', 'question_title', 'question_link', 'question_user_id', 'question_score', 'answer_user_id', 'was_answer_accepted', 'answer_score', 'question_comment_number', 'question_comment_user_id', 'question_comment_repliedto', 'answer_comment_number', 'answer_comment_user_id', 'answer_comment_repliedto']
+to_melt_text = ['question_body', 'answer_body', 'question_comment_body', 'answer_comment_body']
+df = pd.melt(df, id_vars=to_keep_text, value_vars=to_melt_text, var_name='text_type', value_name="text")
+# Drops all unneccesary duplicates
+df = df.drop_duplicates(subset='text', ignore_index=True)
+# Goes through rows and gets rid of data that does not pertain to that type of body of text
+text_types = ["question", "answer", "question_comment", "answer_comment"]
+for text_type in text_types:
+	df[f"{text_type}_user_id"].loc[df["text_type"] != f"{text_type}_body"] = "N/A"
+	try:
+		df[f"{text_type}_number"].loc[df["text_type"] != f"{text_type}_body"] = "N/A"
+	except KeyError:
+		pass
+	try:
+		df[f"{text_type}_score"].loc[df["text_type"] != f"{text_type}_body"] = "N/A"
+	except KeyError:
+		pass
+df["was_answer_accepted"].loc[df["text_type"] != "answer_body"] = "N/A"
+# Replaces all string n/a's with true n/a's for .fillna
+df.replace("N/A", np.nan, inplace=True)
+# Fills na's across rows so that there is only one id column and one score column
+df["id"] = df["question_user_id"].fillna(df[["answer_user_id", "question_comment_user_id", "answer_comment_user_id"]].max(1))
+df["score"] = df["question_score"].fillna(df["answer_score"])
+df["comment_number"] = df["question_comment_number"].fillna(df["answer_comment_number"])
+# Drops unneccessary columns
+df = df.drop(columns=["question_user_id",
+					  "question_score",
+					  "answer_user_id",
+					  "answer_score",
+					  "question_comment_user_id",
+					  "answer_comment_user_id",
+					  "question_comment_number",
+					  "answer_comment_number",
+					  "question_comment_repliedto",
+					  "answer_comment_repliedto"])
+
+
+df.to_csv("test_data.csv", encoding='utf-8', na_rep="N/A")
